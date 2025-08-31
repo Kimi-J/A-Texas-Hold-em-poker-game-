@@ -1,0 +1,5 @@
+<svg width="70" height="100" viewBox="0 0 70 100" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="70" height="100" rx="8" ry="8" fill="#8B0000" stroke="#FFD700" stroke-width="2"/>
+  <circle cx="35" cy="50" r="20" fill="#FFD700"/>
+  <text x="35" y="55" font-family="Arial" font-size="20" fill="#8B0000" text-anchor="middle" alignment-baseline="middle">DP</text>
+</svg>

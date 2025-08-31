@@ -1,0 +1,144 @@
+/* Basic styles for the Texas Hold'em game */
+
+body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #282c34;
+    color: #fff;
+    margin: 0;
+}
+
+.game-container {
+    background-color: #3a404a;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 1200px; /* 增加最大宽度 */
+}
+
+.scoreboard {
+    background-color: #4a505a;
+    padding: 10px;
+    border-radius: 5px;
+    text-align: center;
+    display: flex; /* 使用 Flexbox */
+    justify-content: space-around; /* 平均分布子元素 */
+    align-items: center; /* 垂直居中对齐 */
+}
+
+.scoreboard p {
+    background-color: #3a404a; /* 衬块背景色 */
+    padding: 8px 15px; /* 内边距 */
+    border-radius: 8px; /* 圆角 */
+    margin: 0 5px; /* 左右外边距 */
+    text-align: center; /* 文本居中 */
+    flex-grow: 1; /* 允许增长以填充空间 */
+}
+
+.table {
+    background-color: #004d00; /* 更深的绿色 */
+    border-radius: 15px; /* 较小的圆角 */
+    width: 900px; /* 增加宽度 */
+    height: 450px; /* 减小高度 */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
+.community-cards {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.players {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.controls {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+.action-btn {
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s ease;
+}
+
+#fold {
+    background-color: #FF8C00; /* 橘色 */
+}
+
+#call {
+    background-color: #1E90FF; /* 蓝色 */
+}
+
+#check {
+    background-color: #1E90FF; /* 与call按钮相同的蓝色 */
+}
+
+#raise {
+    background-color: #DAA520; /* 更深的黄色 */
+}
+
+.action-btn:hover {
+    background-color: #45a049;
+}
+
+/* Card styles (placeholder) */
+.card {
+    width: 70px;
+    height: 100px;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+#card-back-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#show-hand {
+    background-color: #004d00; /* 与.table相同的深绿色 */
+    display: block;
+    margin: 15px auto 0; /* 居中并设置上边句 */
+}
+
+#view-next-hand {
+    background-color: #004d00; /* 与.table相同的深绿色 */
+    display: block;
+    margin: 15px auto 0; /* 居中并设置上边距 */
+}
