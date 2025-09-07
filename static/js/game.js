@@ -7,7 +7,7 @@ function initializeGame(playerCount) {
         players: [],
         communityCards: [],
         pot: 0,
-        dealerButton: 0,
+        dealerButton: Math.floor(Math.random() * playerCount), // 随机设置第一轮的庄家位置
         smallBlind: 10,
         bigBlind: 20,
         currentBet: 0,
@@ -15,18 +15,24 @@ function initializeGame(playerCount) {
         gamePhase: 'pre-flop',
         roundStartPlayerIndex: 0, // Track who started the current betting round
         playersActedInRound: 0, // Count how many players have acted in the current round
+        smallBlindIndex: null,
+        bigBlindIndex: null,
     };
 
     // Initialize the deck and shuffle it
     initGame();
 
     for (let i = 1; i <= playerCount; i++) {
-        gameState.players.push({ name: `玩家${i}`, chips: 1000, hand: [], bet: 0, folded: false, showHand: false, hasActedInRound: false });
+        // 统一使用数字标识玩家
+        const playerName = `玩家${i}`;
+        gameState.players.push({ id: i - 1, name: playerName, chips: 1000, hand: [], bet: 0, folded: false, showHand: false, hasActedInRound: false });
     }
 
     // Determine blinds
     const smallBlindIndex = (gameState.dealerButton + 1) % playerCount;
     const bigBlindIndex = (gameState.dealerButton + 2) % playerCount;
+    gameState.smallBlindIndex = smallBlindIndex;
+    gameState.bigBlindIndex = bigBlindIndex;
 
     // Post blinds
     gameState.players[smallBlindIndex].chips -= gameState.smallBlind;
@@ -104,7 +110,7 @@ function createCardElement(card, show = true) {
     if (show) {
         cardDiv.style.backgroundImage = `url('${getCardImagePath(card)}')`;
     } else {
-        cardDiv.style.backgroundImage = `url('../static/images/cards/card_back.png')`; // Path to card back image
+        cardDiv.style.backgroundImage = `url('/static/images/cards/card_back.png')`; // Path to card back image
     }
     cardDiv.style.backgroundSize = 'contain';
     cardDiv.style.backgroundRepeat = 'no-repeat';
@@ -114,75 +120,117 @@ function createCardElement(card, show = true) {
 
 // Get card image path
 function getCardImagePath(card) {
-    return `../static/images/cards/${card.value}_of_${card.suit}.png`;
+    return `/static/images/cards/${card.value}_of_${card.suit}.png`;
 }
 
 // Update the UI based on game state
 function updateUI() {
-    const playersDiv = document.querySelector('.players');
-    playersDiv.innerHTML = ''; // Clear existing player cards
+    // Render seats with player info, badges and active highlight
+    renderSeats();
 
-    gameState.players.forEach((player, index) => {
-        const playerDiv = document.createElement('div');
-        playerDiv.classList.add('player');
-        // Add a data attribute for player ID to easily select them later
-        playerDiv.dataset.playerId = player.id; 
-        playerDiv.innerHTML = `<h3>${player.name} (筹码: ${player.chips}, 下注: ${player.bet})</h3>`;
-        
-        const handDiv = document.createElement('div');
-        handDiv.classList.add('hand');
-        if (!player.showHand) {
-            handDiv.style.display = 'none';
-        }
-        player.hand.forEach(card => {
-            handDiv.appendChild(createCardElement(card, player.showHand));
-        });
-        playerDiv.appendChild(handDiv);
-        playersDiv.appendChild(playerDiv);
-    });
-
-    const communityCardsDiv = document.querySelector('.community-cards');
+    const communityCardsDiv = document.getElementById('community-cards');
     communityCardsDiv.innerHTML = ''; // Clear existing community cards
     gameState.communityCards.forEach(card => {
         communityCardsDiv.appendChild(createCardElement(card));
     });
 
-    const scoreboard = document.querySelector('.scoreboard');
-    scoreboard.innerHTML = `
-        <p>底池: ${gameState.pot}</p>
-        <p>当前下注: ${gameState.currentBet}</p>
-        <p>当前玩家: ${gameState.players[gameState.currentPlayerIndex].name}</p>
-        <p>阶段: ${gameState.gamePhase}</p>
-    `;
+    // Update scoreboard fields
+    const potEl = document.getElementById('pot-amount');
+    const roundEl = document.getElementById('round-name');
+    const minRaiseEl = document.getElementById('min-raise');
+    if (potEl) potEl.textContent = gameState.pot;
+    if (roundEl) {
+        const map = { 'pre-flop': '翻牌前', 'flop': '翻牌', 'turn': '转牌', 'river': '河牌', 'showdown': '摊牌' };
+        roundEl.textContent = map[gameState.gamePhase] || gameState.gamePhase;
+    }
+    if (minRaiseEl) minRaiseEl.textContent = gameState.bigBlind;
 
-    // Update action buttons visibility
+    // Update action buttons state
     const player = gameState.players[gameState.currentPlayerIndex];
     const checkBtn = document.getElementById('check');
     const callBtn = document.getElementById('call');
-    const raiseContainer = document.querySelector('.raise-container');
-    const raiseAmountInput = document.getElementById('raise-amount');
 
-    // If current bet is 0 (start of a new betting round or all checked)
-    if (gameState.currentBet === 0) {
-        checkBtn.style.display = 'inline-block';
-        callBtn.style.display = 'none';
-    } else {
-        // If player's bet matches current bet, they can check (if no one raised after them)
-        if (player.bet === gameState.currentBet) {
-            checkBtn.style.display = 'inline-block';
-            callBtn.style.display = 'none';
+    if (player) {
+        if (gameState.currentBet === 0 || player.bet === gameState.currentBet) {
+            if (checkBtn) checkBtn.disabled = false;
+            if (callBtn) { callBtn.disabled = true; callBtn.textContent = '跟注'; }
         } else {
-            // Player needs to call or raise
-            checkBtn.style.display = 'none';
-            callBtn.style.display = 'inline-block';
-            callBtn.textContent = `跟注 (${gameState.currentBet - player.bet})`;
+            if (checkBtn) checkBtn.disabled = true;
+            const toCall = Math.max(0, gameState.currentBet - player.bet);
+            if (callBtn) { callBtn.disabled = false; callBtn.textContent = `跟注 (${toCall})`; }
         }
     }
-    raiseContainer.style.display = 'inline-block'; // Always show raise for now
-    raiseAmountInput.value = ''; // Clear raise amount input
 
     console.log('Updating UI with current game state:', gameState);
 }
+
+function renderSeats() {
+    for (let i = 0; i < 10; i++) {
+        const seat = document.getElementById(`seat-${i}`);
+        if (!seat) continue;
+        const hasPlayer = i < gameState.players.length;
+        seat.style.display = hasPlayer ? 'block' : 'none';
+        if (!hasPlayer) continue;
+
+        const player = gameState.players[i];
+        // 根据是否处于查看手牌阶段决定高亮的座位
+        const highlightIndex = (typeof handViewing !== 'undefined' && handViewing)
+            ? currentPlayerIndex
+            : gameState.currentPlayerIndex;
+        seat.classList.toggle('active', i === highlightIndex);
+
+        const nameTag = seat.querySelector('.name-tag');
+        if (nameTag) nameTag.textContent = `${player.name}（筹码: ${player.chips}）`;
+
+        const dealerBtn = seat.querySelector('.dealer-btn');
+        if (dealerBtn) dealerBtn.style.display = (i === gameState.dealerButton) ? 'inline-block' : 'none';
+
+        const blindTag = seat.querySelector('.blind-tag');
+        if (blindTag) {
+            if (i === gameState.smallBlindIndex) {
+                blindTag.textContent = '小盲';
+                blindTag.style.display = 'inline-block';
+            } else if (i === gameState.bigBlindIndex) {
+                blindTag.textContent = '大盲';
+                blindTag.style.display = 'inline-block';
+            } else {
+                blindTag.style.display = 'none';
+            }
+        }
+
+        const betTag = seat.querySelector('.bet-tag');
+        if (betTag) {
+            if (player.bet > 0) {
+                betTag.textContent = `${player.bet}`;
+                betTag.style.display = 'inline-block';
+            } else {
+                betTag.style.display = 'none';
+            }
+        }
+
+        // 渲染或隐藏该座位的底牌
+        let cardsContainer = seat.querySelector('.hole-cards');
+        if (!cardsContainer) {
+            cardsContainer = document.createElement('div');
+            cardsContainer.className = 'hole-cards';
+            seat.appendChild(cardsContainer);
+        }
+        // 每次更新先清空
+        cardsContainer.innerHTML = '';
+        if (player.showHand && Array.isArray(player.hand) && player.hand.length >= 2) {
+            cardsContainer.style.display = 'flex';
+            cardsContainer.appendChild(createCardElement(player.hand[0], true));
+            cardsContainer.appendChild(createCardElement(player.hand[1], true));
+        } else {
+            cardsContainer.style.display = 'none';
+        }
+
+        // Render or hide hole cards near seat if needed in future
+    }
+}
+
+// Remove the old updateUI implementation that builds a separate players list; rely on seat-based renderSeats instead.
+// 旧版基于列表的 updateUI 已移除，改用基于座位的渲染（renderSeats + 顶部新版 updateUI）。
 
 // Player actions
 function fold() {
@@ -226,9 +274,12 @@ function call() {
     nextPlayer();
 }
 
-function raise() {
-    const raiseAmountInput = document.getElementById('raise-amount');
-    const amount = parseInt(raiseAmountInput.value);
+function raise(amount) {
+    // Prompt if no amount provided or invalid
+    if (typeof amount === 'undefined' || isNaN(amount)) {
+        const input = prompt('请输入加注金额：', String(gameState.bigBlind || 20));
+        amount = parseInt(input, 10);
+    }
 
     if (isNaN(amount) || amount <= 0) {
         alert("请输入有效的加注金额。");
@@ -250,16 +301,14 @@ function raise() {
     gameState.pot += totalBetRequired;
     gameState.currentBet = player.bet; // Update current bet to the new higher bet
 
-    // Reset hasActedInRound for all players who have already acted in this round
-    // This forces them to act again if they want to continue
-    gameState.players.forEach(p => {
-        if (p.id !== player.id) { // Don't reset for the current player
+    // Other players must act again
+    gameState.players.forEach((p, idx) => {
+        if (idx !== gameState.currentPlayerIndex) {
             p.hasActedInRound = false;
         }
     });
     player.hasActedInRound = true; // Current player has acted
 
-    raiseAmountInput.value = '';
     nextPlayer();
 }
 
@@ -653,6 +702,7 @@ function hidePlayerHand(playerIndex) {
 }
 
 let currentPlayerIndex = 0;
+let handViewing = false; // 是否处于顺序查看手牌阶段
 
 function nextPlayerTurn() {
     // Hide current player's hand
@@ -666,10 +716,11 @@ function nextPlayerTurn() {
         // Show next player's hand
         gameState.players[currentPlayerIndex].showHand = true;
     } else {
-        // All players have viewed their hands, reset or end the viewing phase
-        // For now, let's just hide all hands and disable the button
+        // 所有玩家查看完毕
         gameState.players.forEach(player => player.showHand = false);
         document.getElementById('view-next-hand').style.display = 'none'; // Hide button
+        document.getElementById('show-hand').style.display = 'block'; // Show first button again
+        handViewing = false;
         alert('所有玩家已查看完毕。');
         return;
     }
@@ -678,72 +729,104 @@ function nextPlayerTurn() {
 
 // Initialize game when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-         const startGameButton = document.getElementById('start-game');
-         const playerCountInput = document.getElementById('player-count');
-         const settingsContainer = document.querySelector('.settings-container');
-         const gameContainer = document.querySelector('.game-container');
-         const showHandButton = document.getElementById('show-hand');
-         const viewNextHandButton = document.getElementById('view-next-hand');
-     
-         // Hide game container initially
-         gameContainer.style.display = 'none';
-     
-         startGameButton.addEventListener('click', () => {
-             const playerCount = parseInt(playerCountInput.value);
-             if (playerCount >= 2 && playerCount <= 10) {
-                 initializeGame(playerCount);
-                 settingsContainer.style.display = 'none';
-                 gameContainer.style.display = 'block';
-                 // Initial state for hand viewing
-                 gameState.players.forEach(player => player.showHand = false);
-                 currentPlayerIndex = 0; // Reset current player index for hand viewing
-                 showHandButton.style.display = 'block';
-                 viewNextHandButton.style.display = 'none';
-                 updateUI();
-             } else {
-                 alert('玩家数量必须在2到10之间。');
-             }
-         });
-     
-         showHandButton.addEventListener('click', () => {
-             gameState.players[currentPlayerIndex].showHand = true;
-             updateUI();
-             showHandButton.style.display = 'none';
-             viewNextHandButton.style.display = 'block';
-         });
-     
-         viewNextHandButton.addEventListener('click', () => {
-             gameState.players[currentPlayerIndex].showHand = false; // Hide current player's hand
-             currentPlayerIndex++;
-     
-             if (currentPlayerIndex < gameState.players.length) {
-                 // Prepare for next player
-                 showHandButton.style.display = 'block';
-                 viewNextHandButton.style.display = 'none';
-             } else {
-                 // All players have viewed their hands
-                 gameState.players.forEach(player => player.showHand = false);
-                 showHandButton.style.display = 'none';
-                 viewNextHandButton.style.display = 'none';
-                 alert('所有玩家已查看完毕。');
-             }
-             updateUI();
-         });
-     });
+    const showHandButton = document.getElementById('show-hand');
+    const viewNextHandButton = document.getElementById('view-next-hand');
+    const playerCountModal = document.getElementById('player-count-modal');
+    const gameContainer = document.querySelector('.game-container');
+    const playerCountInput = document.getElementById('player-count-input');
+    const startGameBtn = document.getElementById('start-game-btn');
+    
+    // 修改按钮文本
+    showHandButton.textContent = '看牌';
+    viewNextHandButton.textContent = '查看完毕';
 
-// Event listeners for buttons
-document.getElementById('fold').addEventListener('click', fold);
-document.getElementById('check').addEventListener('click', check);
-document.getElementById('call').addEventListener('click', call);
-document.getElementById('raise').addEventListener('click', raise); // Directly call raise function
-document.getElementById('show-hand').addEventListener('click', showPlayerHand);
-document.getElementById('view-next-hand').addEventListener('click', hidePlayerHand);
-// Remove the duplicate raise event listener that uses prompt()
-document.getElementById('raise').addEventListener('click', () => {
-    const amount = parseInt(prompt('Enter raise amount:', '20'));
-    if (!isNaN(amount)) {
-        raise(amount);
-    }
+    // 开始游戏按钮点击事件
+    startGameBtn.addEventListener('click', () => {
+        let playerCount = parseInt(playerCountInput.value);
+        
+        // 验证玩家数量
+        if (isNaN(playerCount) || playerCount < 2) {
+            playerCount = 2; // 最少2人
+        } else if (playerCount > 10) {
+            playerCount = 10; // 最多10人
+        }
+        
+        // 隐藏不需要的座位
+        const seats = document.querySelectorAll('.seat');
+        seats.forEach((seat, index) => {
+            if (index < playerCount) {
+                seat.style.display = 'block';
+            } else {
+                seat.style.display = 'none';
+            }
+        });
+        
+        // 应用对应人数的布局类
+        const playersLayer = document.getElementById('players-layer');
+        // 先移除所有布局类
+        playersLayer.classList.remove('two-players', 'three-players', 'four-players');
+        
+        // 根据人数添加对应的布局类
+        if (playerCount === 2) {
+            playersLayer.classList.add('two-players');
+        } else if (playerCount === 3) {
+            playersLayer.classList.add('three-players');
+        } else if (playerCount === 4) {
+            playersLayer.classList.add('four-players');
+        }
+        // 5人及以上使用默认布局
+        
+        // 初始化游戏
+        initializeGame(playerCount);
+        
+        // 隐藏对话框，显示游戏界面
+        playerCountModal.style.display = 'none';
+        gameContainer.style.display = 'block';
+        
+        // 初始：未进入查看阶段，隐藏所有底牌
+        gameState.players.forEach(player => (player.showHand = false));
+        currentPlayerIndex = 0;
+        handViewing = false;
+        showHandButton.style.display = 'block';
+        viewNextHandButton.style.display = 'none';
+        updateUI();
+    });
+
+    // 第一次点击：开始查看阶段，展示当前玩家底牌，并切换到"查看完毕"
+    showHandButton.addEventListener('click', () => {
+        handViewing = true;
+        gameState.players[currentPlayerIndex].showHand = true;
+        updateUI();
+        showHandButton.style.display = 'none';
+        viewNextHandButton.style.display = 'block';
+    });
+
+    // 点击"查看完毕"：隐藏当前玩家牌，准备下一位玩家查看
+    viewNextHandButton.addEventListener('click', () => {
+        gameState.players[currentPlayerIndex].showHand = false; // 隐藏当前玩家
+        currentPlayerIndex++;
+
+        if (currentPlayerIndex < gameState.players.length) {
+            // 准备下一位玩家查看
+            showHandButton.style.display = 'block';
+            viewNextHandButton.style.display = 'none';
+        } else {
+            // 结束查看阶段
+            handViewing = false;
+            gameState.players.forEach(player => (player.showHand = false));
+            showHandButton.style.display = 'block';
+            viewNextHandButton.style.display = 'none';
+            currentPlayerIndex = 0; // 重置为第一位玩家
+            alert('所有玩家已查看完毕。');
+        }
+        updateUI();
+    });
+
+    // Attach action buttons once DOM is ready
+    document.getElementById('fold').addEventListener('click', fold);
+    document.getElementById('check').addEventListener('click', check);
+    document.getElementById('call').addEventListener('click', call);
+    document.getElementById('raise').addEventListener('click', () => raise());
 });
 
 // Helper function to convert and evaluate poker hands

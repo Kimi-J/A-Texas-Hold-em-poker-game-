@@ -1,36 +1,108 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>德州扑克游戏</title>
-    <link rel="stylesheet" href="../static/css/style.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Texas Hold'em Game</title>
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <div class="settings-container">
-        <label for="player-count">玩家数量:</label>
-        <input type="number" id="player-count" min="2" max="10" value="2">
-        <button id="start-game">开始游戏</button>
-      </div>
-      <div class="game-container">
-        <div class="scoreboard"></div>
-        <div class="table">
-            <div class="community-cards"></div>
-            <div class="players"></div>
-        </div>
-        <div class="controls">
-            <button class="action-btn" id="fold">弃牌</button>
-            <button class="action-btn" id="check">过牌</button>
-            <button class="action-btn" id="call">跟注</button>
-            <div class="raise-container">
-                <input type="number" id="raise-amount" placeholder="加注金额">
-                <button class="action-btn" id="raise">加注</button>
+<!-- 玩家人数输入对话框 -->
+<div id="player-count-modal" class="modal">
+    <div class="modal-content">
+        <h2>设置游戏</h2>
+        <p>请输入游戏人数 (2-10):</p>
+        <input type="number" id="player-count-input" min="2" max="10" value="4">
+        <button id="start-game-btn">开始游戏</button>
+    </div>
+</div>
+
+<div class="game-container" style="display: none;">
+    <div class="scoreboard">
+        <p>底池：<span id="pot-amount">0</span></p>
+        <p>当前轮次：<span id="round-name">Preflop</span></p>
+        <p>最小加注：<span id="min-raise">0</span></p>
+    </div>
+
+    <div class="table">
+        <div class="community-cards" id="community-cards"></div>
+        <div class="players" id="players-layer">
+            <!-- 10 seats around the table -->
+            <div class="seat seat-0" id="seat-0">
+                <span class="dealer-btn" style="display:none;">D</span>
+                <div class="name-tag">玩家1</div>
+                <div class="blind-tag" style="display:none;"></div>
+                <div class="bet-tag" style="display:none;"></div>
+            </div>
+            <div class="seat seat-1" id="seat-1">
+                <span class="dealer-btn" style="display:none;">D</span>
+                <div class="name-tag">玩家2</div>
+                <div class="blind-tag" style="display:none;"></div>
+                <div class="bet-tag" style="display:none;"></div>
+            </div>
+            <div class="seat seat-2" id="seat-2">
+                <span class="dealer-btn" style="display:none;">D</span>
+                <div class="name-tag">玩家3</div>
+                <div class="blind-tag" style="display:none;"></div>
+                <div class="bet-tag" style="display:none;"></div>
+            </div>
+            <div class="seat seat-3" id="seat-3">
+                <span class="dealer-btn" style="display:none;">D</span>
+                <div class="name-tag">玩家4</div>
+                <div class="blind-tag" style="display:none;"></div>
+                <div class="bet-tag" style="display:none;"></div>
+            </div>
+            <div class="seat seat-4" id="seat-4">
+                <span class="dealer-btn" style="display:none;">D</span>
+                <div class="name-tag">玩家5</div>
+                <div class="blind-tag" style="display:none;"></div>
+                <div class="bet-tag" style="display:none;"></div>
+            </div>
+            <div class="seat seat-5" id="seat-5">
+                <span class="dealer-btn" style="display:none;">D</span>
+                <div class="name-tag">玩家6</div>
+                <div class="blind-tag" style="display:none;"></div>
+                <div class="bet-tag" style="display:none;"></div>
+            </div>
+            <div class="seat seat-6" id="seat-6">
+                <span class="dealer-btn" style="display:none;">D</span>
+                <div class="name-tag">玩家7</div>
+                <div class="blind-tag" style="display:none;"></div>
+                <div class="bet-tag" style="display:none;"></div>
+            </div>
+            <div class="seat seat-7" id="seat-7">
+                <span class="dealer-btn" style="display:none;">D</span>
+                <div class="name-tag">玩家8</div>
+                <div class="blind-tag" style="display:none;"></div>
+                <div class="bet-tag" style="display:none;"></div>
+            </div>
+            <div class="seat seat-8" id="seat-8">
+                <span class="dealer-btn" style="display:none;">D</span>
+                <div class="name-tag">玩家9</div>
+                <div class="blind-tag" style="display:none;"></div>
+                <div class="bet-tag" style="display:none;"></div>
+            </div>
+            <div class="seat seat-9" id="seat-9">
+                <span class="dealer-btn" style="display:none;">D</span>
+                <div class="name-tag">玩家10</div>
+                <div class="blind-tag" style="display:none;"></div>
+                <div class="bet-tag" style="display:none;"></div>
             </div>
         </div>
-        <button class="action-btn" id="show-hand">看牌</button>
-         <button class="action-btn" id="view-next-hand" style="display: none;">查看完毕</button>
     </div>
-    <script src="../static/js/poker-evaluator.js"></script>
-    <script src="../static/js/game.js"></script>
+
+    <div class="controls">
+        <button class="action-btn" id="fold">弃牌</button>
+        <button class="action-btn" id="check">过牌</button>
+        <button class="action-btn" id="call">跟注</button>
+        <button class="action-btn" id="raise">加注</button>
+    </div>
+
+    <button class="action-btn" id="show-hand">展示手牌</button>
+    <button class="action-btn" id="view-next-hand">查看下一手</button>
+</div>
+
+<script src="/static/js/poker-evaluator.js"></script>
+<script src="/static/js/game.js"></script>
 </body>
 </html>
