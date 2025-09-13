@@ -1,0 +1,12 @@
+{
+  "name": "002dp",
+  "version": "1.0.0",
+  "description": "这是一个基于Flask的图形化德州扑克游戏，支持任意数量好友本地在一台电脑上交替轮流加注的玩法，无AI玩家。 是本人高中生业余开发的项目，开发周期不长，多多包涵。",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

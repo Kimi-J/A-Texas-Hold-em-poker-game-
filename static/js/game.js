@@ -2,11 +2,85 @@ let gameState = {
     gamePhase: 'pre-flop', // Possible values: pre-flop, flop, turn, river, showdown
 };
 
+// 添加按钮点击动画效果函数
+function createRippleEffect(event) {
+    const button = event.currentTarget;
+    
+    // 确保按钮有相对定位，以便正确定位涟漪元素
+    if (getComputedStyle(button).position === 'static') {
+        button.style.position = 'relative';
+        button.style.overflow = 'hidden';
+    }
+    
+    // 创建涟漪元素
+    const ripple = document.createElement('span');
+    ripple.classList.add('ripple');
+    
+    // 计算涟漪的大小（取按钮宽高的较大值）
+    const diameter = Math.max(button.clientWidth, button.clientHeight);
+    const radius = diameter / 2;
+    
+    // 设置涟漪元素的尺寸和位置
+    ripple.style.width = ripple.style.height = `${diameter}px`;
+    ripple.style.left = `${event.clientX - button.getBoundingClientRect().left - radius}px`;
+    ripple.style.top = `${event.clientY - button.getBoundingClientRect().top - radius}px`;
+    
+    // 添加到按钮中
+    button.appendChild(ripple);
+    
+    // 动画结束后移除涟漪元素
+    ripple.addEventListener('animationend', () => {
+        ripple.remove();
+    });
+}
+
+// 动态为5-10位玩家应用椭圆均匀分布布局（百分比定位）
+function applyDynamicSeatLayout(playerCount) {
+    const playersLayer = document.getElementById('players-layer');
+    if (!playersLayer) return;
+
+    const a = 42; // 横向半径百分比
+    const b = 38; // 纵向半径百分比（略小，避免上下贴边）
+    const startAngle = -90; // 从顶部开始分布
+
+    // 对于2-4人的情况，清除内联定位，交给CSS专用布局类
+    if (playerCount <= 4) {
+        const allSeats = playersLayer.querySelectorAll('.seat');
+        allSeats.forEach(seat => {
+            seat.style.left = '';
+            seat.style.top = '';
+        });
+        return;
+    }
+
+    // 5人及以上，按等角度在椭圆上分布显示的前 playerCount 个座位
+    for (let i = 0; i < playerCount; i++) {
+        const seat = document.getElementById(`seat-${i}`);
+        if (!seat) continue;
+        const angle = startAngle + (360 / playerCount) * i;
+        const rad = angle * Math.PI / 180;
+        const leftPercent = 50 + a * Math.cos(rad);
+        const topPercent = 50 + b * Math.sin(rad);
+        seat.style.left = `${leftPercent}%`;
+        seat.style.top = `${topPercent}%`;
+    }
+
+    // 隐藏的座位清除内联定位，避免未来切换人数时遗留
+    for (let i = playerCount; i < 10; i++) {
+        const seat = document.getElementById(`seat-${i}`);
+        if (seat) {
+            seat.style.left = '';
+            seat.style.top = '';
+        }
+    }
+}
+
 function initializeGame(playerCount) {
     gameState = {
         players: [],
         communityCards: [],
         pot: 0,
+        pots: [{ amount: 0, eligiblePlayers: [] }], // 主底池和边池数组
         dealerButton: Math.floor(Math.random() * playerCount), // 随机设置第一轮的庄家位置
         smallBlind: 10,
         bigBlind: 20,
@@ -68,8 +142,67 @@ function initGame() {
     
     // Shuffle the deck
     shuffleDeck();
-    
+}
 
+// 创建和管理边池的函数
+function createSidePots() {
+    // 重置底池数组
+    gameState.pots = [];
+    
+    // 获取所有未弃牌的玩家
+    const activePlayers = gameState.players.filter(p => !p.folded);
+    
+    // 如果只有一个活跃玩家，创建一个主池并返回
+    if (activePlayers.length <= 1) {
+        gameState.pots = [{ amount: gameState.pot, eligiblePlayers: activePlayers.map(p => p.id) }];
+        return;
+    }
+    
+    // 按下注金额从小到大排序玩家
+    const sortedPlayers = [...activePlayers].sort((a, b) => a.bet - b.bet);
+    
+    let remainingPot = gameState.pot;
+    let processedBet = 0;
+    
+    // 为每个下注不同的玩家创建边池
+    for (let i = 0; i < sortedPlayers.length; i++) {
+        const currentPlayer = sortedPlayers[i];
+        
+        // 如果当前玩家下注为0或已经处理过相同下注金额，跳过
+        if (currentPlayer.bet === 0 || (i > 0 && currentPlayer.bet === sortedPlayers[i-1].bet)) {
+            continue;
+        }
+        
+        // 计算当前玩家和之前玩家之间的下注差额
+        const betDifference = currentPlayer.bet - processedBet;
+        
+        // 计算这个差额对应的底池金额
+        const potAmount = betDifference * (sortedPlayers.length - i);
+        
+        // 如果有差额，创建一个新的底池
+        if (potAmount > 0) {
+            // 获取有资格参与这个底池的玩家
+            const eligiblePlayers = sortedPlayers.slice(i).map(p => p.id);
+            
+            // 添加底池
+            gameState.pots.push({
+                amount: potAmount,
+                eligiblePlayers: eligiblePlayers
+            });
+            
+            // 更新剩余底池金额和已处理的下注金额
+            remainingPot -= potAmount;
+            processedBet = currentPlayer.bet;
+        }
+    }
+    
+    // 如果所有玩家下注相同，或者处理完所有不同下注后还有剩余，创建一个主池
+    if (gameState.pots.length === 0 || remainingPot > 0) {
+        gameState.pots.unshift({
+            amount: remainingPot,
+            eligiblePlayers: activePlayers.map(p => p.id)
+        });
+    }
 }
 
 // Shuffle the deck using Fisher-Yates algorithm
@@ -138,7 +271,26 @@ function updateUI() {
     const potEl = document.getElementById('pot-amount');
     const roundEl = document.getElementById('round-name');
     const minRaiseEl = document.getElementById('min-raise');
-    if (potEl) potEl.textContent = gameState.pot;
+    
+    // 更新底池显示
+    if (potEl) {
+        // 显示总底池金额
+        potEl.textContent = gameState.pot;
+        
+        // 如果有多个底池，显示详细信息
+        if (gameState.pots && gameState.pots.length > 1) {
+            let potInfo = `总底池: ${gameState.pot}`;
+            gameState.pots.forEach((pot, index) => {
+                if (pot.amount > 0) {
+                    potInfo += `<br>底池 ${index + 1}: ${pot.amount}`;
+                }
+            });
+            potEl.innerHTML = potInfo;
+        } else {
+            potEl.textContent = gameState.pot;
+        }
+    }
+    
     if (roundEl) {
         const map = { 'pre-flop': '翻牌前', 'flop': '翻牌', 'turn': '转牌', 'river': '河牌', 'showdown': '摊牌' };
         roundEl.textContent = map[gameState.gamePhase] || gameState.gamePhase;
@@ -153,11 +305,19 @@ function updateUI() {
     if (player) {
         if (gameState.currentBet === 0 || player.bet === gameState.currentBet) {
             if (checkBtn) checkBtn.disabled = false;
-            if (callBtn) { callBtn.disabled = true; callBtn.textContent = '跟注'; }
+            if (callBtn) { 
+                callBtn.disabled = true; 
+                const callBtnText = callBtn.querySelector('.btn-text');
+                if (callBtnText) callBtnText.textContent = '跟注';
+            }
         } else {
             if (checkBtn) checkBtn.disabled = true;
             const toCall = Math.max(0, gameState.currentBet - player.bet);
-            if (callBtn) { callBtn.disabled = false; callBtn.textContent = `跟注 (${toCall})`; }
+            if (callBtn) { 
+                callBtn.disabled = false; 
+                const callBtnText = callBtn.querySelector('.btn-text');
+                if (callBtnText) callBtnText.textContent = `跟注 (${toCall})`;
+            }
         }
     }
 
@@ -235,11 +395,13 @@ function renderSeats() {
 // Player actions
 function fold() {
     gameState.players[gameState.currentPlayerIndex].folded = true;
-    gameState.players[gameState.currentPlayerIndex].hasActedIn_round = true;
+    gameState.players[gameState.currentPlayerIndex].hasActedInRound = true; // 修正拼写错误
 
     // 检查是否只剩一个玩家未弃牌
     const activePlayers = gameState.players.filter(player => !player.folded);
     if (activePlayers.length === 1) {
+        // 创建边池，确保正确分配筹码
+        createSidePots();
         endRoundEarly(activePlayers[0]);
         return; // 提前结束，不再进行nextPlayer
     }
@@ -262,7 +424,18 @@ function call() {
     const callAmount = gameState.currentBet - player.bet;
     
     if (player.chips < callAmount) {
-        alert("筹码不足，无法跟注。");
+        // 筹码不足，执行All in
+        const allInAmount = player.chips;
+        player.chips = 0;
+        player.bet += allInAmount;
+        gameState.pot += allInAmount;
+        player.hasActedInRound = true;
+        alert(`${player.name} 筹码不足，已All in！`);
+        
+        // 创建边池
+        createSidePots();
+        
+        nextPlayer();
         return;
     }
 
@@ -292,7 +465,29 @@ function raise(amount) {
     const totalBetRequired = amountToCall + amount; // Total chips player needs to put in
 
     if (player.chips < totalBetRequired) {
-        alert("你的筹码不足以加注这么多。");
+        // 筹码不足，执行All in
+        const allInAmount = player.chips;
+        player.chips = 0;
+        player.bet += allInAmount;
+        gameState.pot += allInAmount;
+        player.hasActedInRound = true;
+        
+        // 如果All in金额大于当前最大下注，更新当前最大下注
+        if (player.bet > gameState.currentBet) {
+            gameState.currentBet = player.bet;
+            // 其他玩家需要重新行动
+            gameState.players.forEach((p, idx) => {
+                if (idx !== gameState.currentPlayerIndex) {
+                    p.hasActedInRound = false;
+                }
+            });
+        }
+        
+        // 创建边池
+        createSidePots();
+        
+        alert(`${player.name} 筹码不足，已All in！`);
+        nextPlayer();
         return;
     }
     
@@ -332,14 +527,14 @@ function nextPlayer() {
             continue;
         }
 
-        // If the next player has already acted in this round and their bet matches the current bet
+        // If the next player has already acted in this round and their bet matches the current bet or they are all-in
         // and they are not the one who started the round (unless everyone else has acted)
-        if (nextPlayer.hasActedInRound && nextPlayer.bet === gameState.currentBet) {
-            // This player has already acted and matched the bet, skip them unless they are the last to act
-            // and everyone else has also acted and matched.
+        if (nextPlayer.hasActedInRound && (nextPlayer.bet === gameState.currentBet || nextPlayer.chips === 0)) {
+            // This player has already acted and matched the bet or is all-in, skip them unless they are the last to act
+            // and everyone else has also acted and matched or is all-in.
             const activePlayers = gameState.players.filter(p => !p.folded);
             const allActivePlayersActed = activePlayers.every(p => p.hasActedInRound);
-            const allActivePlayersMatchedBet = activePlayers.every(p => p.bet === gameState.currentBet);
+            const allActivePlayersMatchedBet = activePlayers.every(p => p.bet === gameState.currentBet || p.chips === 0);
 
             if (allActivePlayersActed && allActivePlayersMatchedBet) {
                 endBettingRound();
@@ -365,14 +560,17 @@ function isBettingRoundOver() {
     // Check if all active players have acted in this round
     const allActivePlayersActed = activePlayers.every(p => p.hasActedInRound);
 
-    // Check if all active players have matched the current bet
-    const allActivePlayersMatchedBet = activePlayers.every(p => p.bet === gameState.currentBet);
+    // Check if all active players have matched the current bet or are all-in (chips = 0)
+    const allActivePlayersMatchedBet = activePlayers.every(p => p.bet === gameState.currentBet || p.chips === 0);
 
-    // If all active players have acted AND all active players have matched the current bet
+    // If all active players have acted AND all active players have matched the current bet or are all-in
     return allActivePlayersActed && allActivePlayersMatchedBet;
 }
 
 function endBettingRound() {
+    // 在重置下注前，确保边池已正确创建
+    createSidePots();
+    
     // Reset bets for the next round and hasActedInRound status
     gameState.players.forEach(p => {
         p.bet = 0;
@@ -454,37 +652,64 @@ function showdown() {
         return;
     }
 
-    let winners = [];
-    let bestHandResult = null;
-
+    // 确保边池已正确创建
+    createSidePots();
+    
+    // 评估每个玩家的最佳手牌
     for (const player of playersInHand) {
-        const playerHandResult = PokerEvaluator.evaluateHand(player.hand, gameState.communityCards);
-        player.bestHand = playerHandResult; // Store for display
-
-        if (!bestHandResult || playerHandResult.value > bestHandResult.value) {
-            bestHandResult = playerHandResult;
-            winners = [player];
-        } else if (playerHandResult.value === bestHandResult.value) {
-            // Compare hands using custom logic for tie-breaking
-            // Use PokerEvaluator.breakTie for detailed tie-breaking
-            const tieResult = PokerEvaluator.breakTie(playerHandResult.bestHand, bestHandResult.bestHand);
-            if (tieResult === 1) {
-                bestHandResult = playerHandResult; // New player has a better hand (e.g., higher kicker)
-                winners = [player];
-            } else if (tieResult === 0) {
-                winners.push(player); // Truly tied, add to winners
+        player.bestHand = PokerEvaluator.evaluateHand(player.hand, gameState.communityCards);
+    }
+    
+    let winnerMessage = '赢家：\n';
+    
+    // 处理每个底池
+    for (let i = 0; i < gameState.pots.length; i++) {
+        const pot = gameState.pots[i];
+        
+        // 获取有资格参与这个底池的玩家
+        const eligiblePlayers = playersInHand.filter(p => pot.eligiblePlayers.includes(p.id));
+        
+        if (eligiblePlayers.length === 0) {
+            continue; // 跳过没有合格玩家的底池
+        }
+        
+        if (eligiblePlayers.length === 1) {
+            // 只有一个玩家有资格，直接获得底池
+            const winner = eligiblePlayers[0];
+            winner.chips += pot.amount;
+            winnerMessage += `${winner.name} 赢得了底池 ${i+1} 的 ${pot.amount} 筹码！\n`;
+            continue;
+        }
+        
+        // 找出这个底池的赢家
+        let potWinners = [];
+        let bestHandResult = null;
+        
+        for (const player of eligiblePlayers) {
+            if (!bestHandResult || player.bestHand.value > bestHandResult.value) {
+                bestHandResult = player.bestHand;
+                potWinners = [player];
+            } else if (player.bestHand.value === bestHandResult.value) {
+                // 比较手牌进行平局判断
+                const tieResult = PokerEvaluator.breakTie(player.bestHand.bestHand, bestHandResult.bestHand);
+                if (tieResult === 1) {
+                    bestHandResult = player.bestHand;
+                    potWinners = [player];
+                } else if (tieResult === 0) {
+                    potWinners.push(player); // 真正平局，添加到赢家列表
+                }
+                // 如果tieResult是-1，当前赢家更好，不做任何操作
             }
-            // If tieResult is -1, current winner is better, do nothing
+        }
+        
+        // 在赢家之间分配这个底池
+        const potAmountPerWinner = Math.floor(pot.amount / potWinners.length);
+        for (const winner of potWinners) {
+            winner.chips += potAmountPerWinner;
+            winnerMessage += `${winner.name} 凭借 ${winner.bestHand.rank} 牌型赢得了底池 ${i+1} 的 ${potAmountPerWinner} 筹码！\n`;
         }
     }
-
-    // Distribute pot among winners
-    const potPerWinner = Math.floor(gameState.pot / winners.length);
-    let winnerMessage = '赢家：\n';
-    for (const winner of winners) {
-        winner.chips += potPerWinner;
-        winnerMessage += `${winner.name} 凭借 ${winner.bestHand.rank} 牌型赢得了 ${potPerWinner} 筹码！\n`;
-    }
+    
     alert(winnerMessage);
     
     // Create and show a modal for reviewing all players' hands
@@ -636,6 +861,7 @@ function resetGameForNextHand() {
     // Reset game state for a new hand
     gameState.communityCards = [];
     gameState.pot = 0;
+    gameState.pots = [{ amount: 0, eligiblePlayers: [] }]; // 重置边池数组
     gameState.currentBet = 0;
     gameState.gamePhase = 'pre-flop';
     gameState.playersActedInRound = 0;
@@ -728,6 +954,74 @@ function nextPlayerTurn() {
 }
 
 // Initialize game when DOM is loaded
+// 导出游戏进度功能
+function exportGameProgress() {
+    // 创建一个副本，避免修改原始游戏状态
+    const exportData = JSON.stringify(gameState);
+    
+    // 创建Blob对象
+    const blob = new Blob([exportData], { type: 'application/json' });
+    
+    // 创建下载链接
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `poker_game_${new Date().toISOString().replace(/[:.]/g, '-')}.dpdata`;
+    
+    // 触发下载
+    document.body.appendChild(a);
+    a.click();
+    
+    // 清理
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+}
+
+// 导入游戏进度功能
+function importGameProgress(file) {
+    const reader = new FileReader();
+    
+    reader.onload = function(event) {
+        try {
+            // 解析JSON数据
+            const importedState = JSON.parse(event.target.result);
+            
+            // 恢复游戏状态
+            gameState = importedState;
+            
+            // 更新UI
+            updateUI();
+            
+            alert('游戏进度已成功导入！');
+        } catch (error) {
+            console.error('导入游戏进度失败:', error);
+            alert('导入失败，文件格式不正确！');
+        }
+    };
+    
+    reader.onerror = function() {
+        console.error('读取文件失败！');
+        alert('读取文件失败！');
+    };
+    
+    reader.readAsText(file);
+}
+
+// 处理导入按钮点击事件
+function handleImportButtonClick() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.dpdata';
+    
+    input.onchange = function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            importGameProgress(file);
+        }
+    };
+    
+    input.click();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const showHandButton = document.getElementById('show-hand');
     const viewNextHandButton = document.getElementById('view-next-hand');
@@ -735,11 +1029,49 @@ document.addEventListener('DOMContentLoaded', () => {
     const gameContainer = document.querySelector('.game-container');
     const playerCountInput = document.getElementById('player-count-input');
     const startGameBtn = document.getElementById('start-game-btn');
+    const exportBtn = document.getElementById('export-progress');
+    const importBtn = document.getElementById('import-progress');
+    const importFileInput = document.getElementById('import-file');
+    
+    // 为导出和导入按钮添加事件监听器
+    if (exportBtn) {
+        exportBtn.addEventListener('click', function(event) {
+            createRippleEffect(event);
+            exportGameProgress();
+        });
+    }
+    
+    if (importBtn) {
+        importBtn.addEventListener('click', function(event) {
+            createRippleEffect(event);
+            // 使用隐藏的文件输入框
+            importFileInput.click();
+        });
+    }
+    
+    // 为文件输入框添加change事件
+    if (importFileInput) {
+        importFileInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                importGameProgress(file);
+            }
+        });
+    }
     
     // 修改按钮文本
     showHandButton.textContent = '看牌';
     viewNextHandButton.textContent = '查看完毕';
+    
+    // 为所有操作按钮添加点击动画效果
+    const actionButtons = document.querySelectorAll('.action-btn');
+    actionButtons.forEach(button => {
+        button.addEventListener('click', createRippleEffect);
+    });
 
+    // 为开始游戏按钮也添加点击动画效果
+    startGameBtn.addEventListener('click', createRippleEffect);
+    
     // 开始游戏按钮点击事件
     startGameBtn.addEventListener('click', () => {
         let playerCount = parseInt(playerCountInput.value);
@@ -769,12 +1101,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // 根据人数添加对应的布局类
         if (playerCount === 2) {
             playersLayer.classList.add('two-players');
+            playersLayer.classList.remove('dynamic-layout');
         } else if (playerCount === 3) {
             playersLayer.classList.add('three-players');
+            playersLayer.classList.remove('dynamic-layout');
         } else if (playerCount === 4) {
             playersLayer.classList.add('four-players');
+            playersLayer.classList.remove('dynamic-layout');
+        } else {
+            // 5-10人：启用动态布局类，由JS控制
+            playersLayer.classList.add('dynamic-layout');
         }
-        // 5人及以上使用默认布局
+        
+        // 5人及以上使用动态布局
+        applyDynamicSeatLayout(playerCount);
         
         // 初始化游戏
         initializeGame(playerCount);
@@ -833,8 +1173,16 @@ document.addEventListener('DOMContentLoaded', () => {
 // (Assuming PokerEvaluator.js is loaded and available globally)
 
 function endRoundEarly(winner) {
-    winner.chips += gameState.pot;
-    // alert(`${winner.name} 赢得了底池 ${gameState.pot} 筹码！`);
-    // resetGameForNextHand();
-    showdown();
+    // 确保边池已正确创建
+    createSidePots();
+    
+    // 如果只有一个玩家未弃牌，他赢得所有底池
+    let totalWinnings = 0;
+    for (const pot of gameState.pots) {
+        winner.chips += pot.amount;
+        totalWinnings += pot.amount;
+    }
+    
+    alert(`${winner.name} 赢得了总计 ${totalWinnings} 筹码！`);
+    resetGameForNextHand();
 }

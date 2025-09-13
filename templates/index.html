@@ -17,6 +17,13 @@
     </div>
 </div>
 
+<!-- 进度导入导出按钮 -->
+<div class="progress-controls">
+    <button class="progress-btn" id="export-progress">进度导出</button>
+    <button class="progress-btn" id="import-progress">进度导入</button>
+    <input type="file" id="import-file" accept=".dpdata" style="display: none;">
+</div>
+
 <div class="game-container" style="display: none;">
     <div class="scoreboard">
         <p>底池：<span id="pot-amount">0</span></p>
@@ -92,10 +99,10 @@
     </div>
 
     <div class="controls">
-        <button class="action-btn" id="fold">弃牌</button>
-        <button class="action-btn" id="check">过牌</button>
-        <button class="action-btn" id="call">跟注</button>
-        <button class="action-btn" id="raise">加注</button>
+        <button class="action-btn" id="fold"><span class="btn-text">弃牌</span></button>
+        <button class="action-btn" id="check"><span class="btn-text">过牌</span></button>
+        <button class="action-btn" id="call"><span class="btn-text">跟注</span></button>
+        <button class="action-btn" id="raise"><span class="btn-text">加注</span></button>
     </div>
 
     <button class="action-btn" id="show-hand">展示手牌</button>
